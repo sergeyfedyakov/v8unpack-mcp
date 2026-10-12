@@ -122,8 +122,24 @@ def build_and_save(out_dir: str, raw_dir: str) -> dict:
             if folder is not None and base not in root_uuids:
                 files_by_folder[folder].append(f'{level}/{entry}')
 
+    # raw-файлы, которые не удалось отнести ни к одной папке объекта
+    # (организатор не материализует такие объекты): при сборке они могут быть
+    # потеряны — сохраняем их список в индексе и переносим страховкой в build().
+    attributed = {f for files in files_by_folder.values() for f in files}
+    unattributed = []
+    for level in sorted(os.listdir(raw_dir)):
+        level_dir = os.path.join(raw_dir, level)
+        if not os.path.isdir(level_dir):
+            continue
+        for entry in sorted(os.listdir(level_dir)):
+            rel = f'{level}/{entry}'
+            if rel in attributed or entry.split('.')[0].lower() in root_uuids:
+                continue
+            unattributed.append(rel)
+
     root_files = _root_files(out_dir)
     index = {
+        'unattributed': unattributed,
         'folders': {},
         'root': {'fp': _hash_root_files(root_files), 'stat': _stat_root_files(root_files)},
     }
@@ -136,6 +152,14 @@ def build_and_save(out_dir: str, raw_dir: str) -> dict:
     with open(os.path.join(raw_dir, INDEX_FILE), 'w', encoding='utf-8') as f:
         json.dump(index, f, ensure_ascii=False, indent=1)
     return index
+
+
+def get_unattributed(raw_dir: str) -> list:
+    """raw-файлы, не отнесённые ни к одной папке объекта (см. build_and_save)."""
+    index = load(raw_dir)
+    if index is None:
+        return []
+    return list(index.get('unattributed') or [])
 
 
 def load(raw_dir: str):

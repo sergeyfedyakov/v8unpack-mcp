@@ -22,6 +22,38 @@ from .version import __version__
 FINGERPRINT_FILE = 'fingerprint'
 
 
+def _carry_over_raw_files(raw_dir, stage1_dir) -> int:
+    """Донести в stage1 raw-файлы, которых там не оказалось.
+
+    Страховка от молчаливой потери объектов: часть raw-файлов не атрибутируется
+    папкам объектов (организатор не материализует такие типы), при гранулярной
+    сборке они не переносятся индексом и раньше исчезали из результата.
+    """
+    carried = 0
+    missing = []
+    for level in sorted(os.listdir(raw_dir)):
+        level_dir = os.path.join(raw_dir, level)
+        if not os.path.isdir(level_dir):
+            continue  # fingerprint, objects.json и прочие служебные файлы
+        dest_level = os.path.join(stage1_dir, level)
+        for entry in sorted(os.listdir(level_dir)):
+            src = os.path.join(level_dir, entry)
+            dst = os.path.join(dest_level, entry)
+            if os.path.exists(dst):
+                continue
+            os.makedirs(dest_level, exist_ok=True)
+            if os.path.isdir(src):
+                shutil.copytree(src, dst)
+            else:
+                shutil.copy2(src, dst)
+            carried += 1
+            missing.append(f'{level}/{entry}')
+    if carried:
+        print(f'{"Донесено raw-файлов":30}: {carried} ({", ".join(missing[:5])}'
+              f'{"..." if len(missing) > 5 else ""})')
+    return carried
+
+
 def _dir_fingerprint(root):
     """Хэш дерева исходников (для определения, редактировались ли они)."""
     h = hashlib.sha256()
@@ -213,6 +245,13 @@ def build(in_dir_name: str, out_file_name: str, *, temp_dir=None, index=None,
                 print(f'{"Гранулярная сборка":30}: из raw перенесено объектов: {len(skip_map)}')
                 for key in ('skip_objects', 'raw_root', 'organized_root'):
                     options.pop(key, None)
+
+            # Страховка: ни один raw-файл не должен исчезнуть из результата.
+            raw_dir = os.path.join(in_dir_name, RAW_DIR)
+            if os.path.isdir(raw_dir):
+                carried = _carry_over_raw_files(raw_dir, dir_stage1)
+                if carried:
+                    options['_raw_carried'] = carried
 
         # json_encode(dir_stage2, dir_stage1, pool=pool)
 

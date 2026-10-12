@@ -191,12 +191,19 @@ def start_repack(dir_path: str, output_path: str) -> dict:
 
 
 def _do_repack(dir_path: str, output_path: str) -> dict:
-    _build_silent(dir_path, output_path, options={"use_raw": True})
-    return {
+    options = {"use_raw": True}
+    _build_silent(dir_path, output_path, options=options)
+    result = {
         "status": "ok",
         "output": output_path,
         "bytes": os.path.getsize(output_path),
     }
+    if options.get("_raw_carried"):
+        result["raw_files_carried_over"] = options["_raw_carried"]
+        result["warning"] = (f'{options["_raw_carried"]} raw-файлов не были '
+                             f'атрибутированы объектам и донесены страховкой '
+                             f'(см. object_index.get_unattributed)')
+    return result
 
 
 def job_status(job_id: str) -> dict:
@@ -895,12 +902,19 @@ def repack(dir_path: str, output_path: str) -> dict:
     parent = os.path.dirname(output_path)
     if not os.path.isdir(parent):
         raise FileNotFoundError(f"Каталог назначения не существует: {parent}")
-    _build_silent(dir_path, output_path, options={"use_raw": True})
-    return {
+    options = {"use_raw": True}
+    _build_silent(dir_path, output_path, options=options)
+    result = {
         "status": "ok",
         "output": output_path,
         "bytes": os.path.getsize(output_path),
     }
+    if options.get("_raw_carried"):
+        result["raw_files_carried_over"] = options["_raw_carried"]
+        result["warning"] = (f'{options["_raw_carried"]} raw-файлов не были '
+                             f'атрибутированы объектам и донесены страховкой '
+                             f'(см. object_index.get_unattributed)')
+    return result
 
 
 # --- Справочная информация (help) ---
